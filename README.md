@@ -3,7 +3,7 @@
 See your parents at 70 — two futures, one choice.
 
 Built at **TechnoFora '26** · FinTech Track · Problem Statement #5
-
+**Live demo:** https://paisa-mirror-deploy.vercel.app
 ---
 
 ## The Problem
