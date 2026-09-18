@@ -1,0 +1,44 @@
+[
+  {
+    "id": "family1",
+    "parentName": "Sunita",
+    "relation": "mother",
+    "currentAge": 50,
+    "retirementAge": 70,
+    "monthlyIncome": 60000,
+    "monthlyExpenses": 40000,
+    "currentSavings": 200000,
+    "hasPension": true,
+    "habitsDetail": "always liked eating out on weekends",
+    "photoPath": "/demo/family1-mother.jpg",
+    "agedPhotoPath": "/demo/family1-aged.jpg"
+  },
+  {
+    "id": "family2",
+    "parentName": "Lakshmi",
+    "relation": "mother",
+    "currentAge": 55,
+    "retirementAge": 70,
+    "monthlyIncome": 35000,
+    "monthlyExpenses": 30000,
+    "currentSavings": 50000,
+    "hasPension": false,
+    "habitsDetail": "never had a habit of saving, spent on family",
+    "photoPath": "/demo/family2-mother.jpg",
+    "agedPhotoPath": "/demo/family2-aged.jpg"
+  },
+  {
+    "id": "family3",
+    "parentName": "Meena",
+    "relation": "mother",
+    "currentAge": 45,
+    "retirementAge": 70,
+    "monthlyIncome": 80000,
+    "monthlyExpenses": 50000,
+    "currentSavings": 500000,
+    "hasPension": true,
+    "habitsDetail": "started a small SIP early because a friend advised her",
+    "photoPath": "/demo/family3-mother.jpg",
+    "agedPhotoPath": "/demo/family3-aged.jpg"
+  }
+]
