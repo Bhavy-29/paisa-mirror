@@ -1,168 +1,211 @@
 "use client";
-
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import Link from "next/link";
+import { calculateFutures, formatINR } from "@/lib/projection";
+import {
+  buildDependentPrompt,
+  buildIndependentPrompt,
+  PersonaProfile
+} from "@/lib/prompts";
+import { callGemini } from "@/lib/gemini";
+import { speak, stopSpeaking } from "@/lib/tts";
 
-type FutureResult = {
-  dependent: number;
-  independent: number;
-};
-
-const formatINR = (value: number) => {
-  return new Intl.NumberFormat("en-IN", {
-    style: "currency",
-    currency: "INR",
-    maximumFractionDigits: 0,
-  }).format(value);
-};
-
-export default function Reveal() {
-  const router = useRouter();
-
-  const [results, setResults] = useState<FutureResult>({
-    dependent: 0,
-    independent: 18000000,
-  });
-
-  const [revealed, setRevealed] = useState(false);
-
-  useEffect(() => {
-    /*
-     * Member 1 can replace this demo calculation with:
-     *
-     * const profile = JSON.parse(
-     *   localStorage.getItem("pm_profile") || "{}"
-     * );
-     *
-     * calculateFutures(profile)
-     */
-
-    setTimeout(() => {
-      setRevealed(true);
-    }, 400);
-  }, []);
-
-  const formatINR = (value: number) => {
-    return new Intl.NumberFormat("en-IN", {
-      style: "currency",
-      currency: "INR",
-      maximumFractionDigits: 0,
-    }).format(value);
-  };
-
-  return (
-    <main className="min-h-screen overflow-hidden bg-black">
-      <div className="grid min-h-screen md:grid-cols-2">
-        {/* DEPENDENT FUTURE */}
-        <FuturePanel
-          type="dependent"
-          image="/demo/family1-aged-sad.jpg"
-          amount={results.dependent}
-          label="Dependent future — living on your money"
-          revealed={revealed}
-        />
-
-        {/* INDEPENDENT FUTURE */}
-        <FuturePanel
-          type="independent"
-          image="/demo/family1-aged-happy.jpg"
-          amount={results.independent}
-          label="Independent future — free and self-funded"
-          revealed={revealed}
-        />
-      </div>
-
-      {/* Bottom CTA */}
-      <div className="pointer-events-none fixed inset-x-0 bottom-0 flex justify-center pb-7">
-        <button
-          onClick={() => router.push("/")}
-          className="pointer-events-auto rounded-full border border-white/20 bg-black/80 px-7 py-3.5 text-sm font-medium text-white backdrop-blur-xl transition-all duration-300 hover:scale-105 hover:bg-black active:scale-95"
-        >
-          Hear what she has to say
-          <span className="ml-2">→</span>
-        </button>
-      </div>
-    </main>
-  );
+interface Profile {
+  photoDataUrl: string;
+  parentName: string;
+  parentAge: number;
+  monthlyIncome: number;
+  currentSavings: number;
+  hasPension: boolean;
+  habitsDetail: string;
 }
 
-function FuturePanel({
-  type,
-  image,
-  amount,
-  label,
-  revealed,
-}: {
-  type: "dependent" | "independent";
-  image: string;
-  amount: number;
-  label: string;
-  revealed: boolean;
-}) {
-  const isIndependent = type === "independent";
+export default function Reveal() {
+  const [profile, setProfile] = useState<Profile | null>(null);
+  const [corpusA, setCorpusA] = useState(0);
+  const [corpusB, setCorpusB] = useState(0);
+  const [dependentLine, setDependentLine] = useState("");
+  const [independentLine, setIndependentLine] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [spoken, setSpoken] = useState(false);
+
+  useEffect(() => {
+    const stored = localStorage.getItem("pm_profile");
+    if (!stored) return;
+    const p: Profile = JSON.parse(stored);
+    setProfile(p);
+
+    const result = calculateFutures({
+      parentCurrentAge: p.parentAge,
+      retirementAge: 70,
+      currentSavings: p.currentSavings,
+      monthlyAmountUserCanAdd: 9000,
+      annualReturnPercent: 12
+    });
+    setCorpusA(result.corpusA);
+    setCorpusB(result.corpusB);
+  }, []);
+
+  async function hearHer() {
+    if (!profile) return;
+    setLoading(true);
+
+    const personaProfile: PersonaProfile = {
+      parentName: profile.parentName,
+      userName: "beta",
+      userAge: 25,
+      parentAge: profile.parentAge,
+      habitsDetail: profile.habitsDetail,
+      corpusA,
+      corpusB
+    };
+
+    try {
+      const depPrompt = buildDependentPrompt(personaProfile);
+      const indPrompt = buildIndependentPrompt(personaProfile);
+
+      const [dep, ind] = await Promise.all([
+        callGemini(depPrompt),
+        callGemini(indPrompt)
+      ]);
+
+      setDependentLine(dep);
+      setIndependentLine(ind);
+      setSpoken(true);
+
+      stopSpeaking();
+      speak(dep);
+      setTimeout(() => speak(ind), 7000);
+    } catch (e) {
+      console.error(e);
+      setDependentLine("(Voice unavailable — check API key)");
+      setIndependentLine("(Voice unavailable — check API key)");
+    }
+    setLoading(false);
+  }
+
+  if (!profile) {
+    return (
+      <main className="min-h-screen flex items-center justify-center bg-black text-white">
+        <div className="text-center">
+          <p className="text-neutral-400 mb-6">No profile found.</p>
+          <Link
+            href="/questionnaire"
+            className="px-6 py-3 bg-white text-black rounded-full"
+          >
+            Go back
+          </Link>
+        </div>
+      </main>
+    );
+  }
 
   return (
-    <section
-      className={`relative flex min-h-[50vh] flex-col justify-center overflow-hidden px-6 pb-28 pt-10 transition-all duration-1000 md:min-h-screen md:px-10 lg:px-16 ${
-        isIndependent
-          ? "bg-[#eee8dc] text-[#181714]"
-          : "bg-[#11100f] text-white"
-      }`}
-    >
-      {/* Background glow */}
-      <div
-        className={`pointer-events-none absolute inset-0 ${
-          isIndependent
-            ? "bg-[radial-gradient(circle_at_50%_35%,rgba(255,255,255,0.8),transparent_55%)]"
-            : "bg-[radial-gradient(circle_at_50%_35%,rgba(255,255,255,0.06),transparent_55%)]"
-        }`}
-      />
-
-      <div
-        className={`relative z-10 mx-auto w-full max-w-xl transition-all duration-[1200ms] ${
-          revealed
-            ? "translate-y-0 opacity-100"
-            : "translate-y-8 opacity-0"
-        }`}
-      >
-        {/* Image */}
-        <div className="group relative overflow-hidden rounded-[2rem]">
-          <img
-            src={image}
-            alt=""
-            className="aspect-[4/3] w-full object-cover animate-breathe transition duration-700 group-hover:scale-105"
-          />
-
-          <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/20 to-transparent" />
-        </div>
-
-        {/* Future label */}
-        <p
-          className={`mt-8 text-xs font-semibold uppercase tracking-[0.25em] ${
-            isIndependent ? "text-black/40" : "text-white/35"
-          }`}
-        >
-          {isIndependent ? "THE INDEPENDENT FUTURE" : "THE DEPENDENT FUTURE"}
+    <main className="min-h-screen bg-black text-white">
+      <header className="text-center pt-10 pb-4 px-6">
+        <p className="text-xs tracking-[0.35em] text-amber-300/60">
+          TWO FUTURES · ONE PARENT
         </p>
+        <h1 className="mt-3 text-2xl md:text-3xl font-serif font-light">
+          Meet {profile.parentName}, age 70
+        </h1>
+      </header>
 
-        {/* Number */}
-        <div
-          className={`mt-3 text-5xl font-medium tracking-tight transition-all duration-1000 sm:text-6xl lg:text-7xl ${
-            isIndependent ? "text-emerald-700" : "text-red-400"
-          }`}
-        >
-          {formatINR(amount)}
-        </div>
+      <div className="grid md:grid-cols-2 gap-0 md:gap-6 px-4 md:px-10 pb-32">
+        <section className="relative rounded-3xl overflow-hidden bg-gradient-to-b from-neutral-950 to-black border border-red-900/30 p-8 flex flex-col items-center text-center min-h-[500px]">
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(220,38,38,0.08),_transparent_70%)] pointer-events-none" />
 
-        {/* Description */}
-        <p
-          className={`mt-3 max-w-sm text-sm leading-6 ${
-            isIndependent ? "text-black/50" : "text-white/45"
-          }`}
-        >
-          {label}
-        </p>
+          {profile.photoDataUrl && (
+            <div className="relative">
+              <img
+                src={profile.photoDataUrl}
+                alt="parent"
+                className="w-40 h-40 object-cover rounded-full border-2 border-red-900/40 grayscale-[40%] contrast-75"
+              />
+            </div>
+          )}
+
+          <p className="mt-8 text-xs tracking-[0.3em] text-red-400/70">
+            DEPENDENT FUTURE
+          </p>
+
+          <p className="mt-4 text-5xl md:text-6xl font-serif font-light text-red-400">
+            {formatINR(corpusA)}
+          </p>
+
+          <p className="mt-3 text-neutral-500 text-sm">
+            living on your money
+          </p>
+
+          <div className="mt-8 pt-8 border-t border-neutral-800 w-full">
+            <p className="text-neutral-300 italic text-lg leading-relaxed min-h-[100px] flex items-center justify-center">
+              {dependentLine || (
+                <span className="text-neutral-600 not-italic text-sm">
+                  Press the button below to hear her voice
+                </span>
+              )}
+            </p>
+          </div>
+        </section>
+
+        <section className="relative rounded-3xl overflow-hidden bg-gradient-to-b from-amber-50 to-white border border-amber-200 p-8 flex flex-col items-center text-center min-h-[500px] text-black">
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(212,175,55,0.15),_transparent_70%)] pointer-events-none" />
+
+          {profile.photoDataUrl && (
+            <div className="relative">
+              <img
+                src={profile.photoDataUrl}
+                alt="parent"
+                className="w-40 h-40 object-cover rounded-full border-2 border-amber-300"
+              />
+            </div>
+          )}
+
+          <p className="mt-8 text-xs tracking-[0.3em] text-amber-700/80">
+            INDEPENDENT FUTURE
+          </p>
+
+          <p className="mt-4 text-5xl md:text-6xl font-serif font-light text-amber-700">
+            {formatINR(corpusB)}
+          </p>
+
+          <p className="mt-3 text-neutral-600 text-sm">
+            free and self-funded
+          </p>
+
+          <div className="mt-8 pt-8 border-t border-amber-200 w-full">
+            <p className="text-neutral-800 italic text-lg leading-relaxed min-h-[100px] flex items-center justify-center">
+              {independentLine || (
+                <span className="text-neutral-500 not-italic text-sm">
+                  Press the button below to hear her voice
+                </span>
+              )}
+            </p>
+          </div>
+        </section>
       </div>
-    </section>
+
+      <div className="fixed bottom-0 left-0 right-0 bg-gradient-to-t from-black via-black/95 to-transparent pt-8 pb-6 px-6">
+        <div className="flex justify-center gap-3">
+          <button
+            onClick={hearHer}
+            disabled={loading}
+            className="px-8 py-4 bg-amber-400 text-black rounded-full text-base font-medium hover:scale-[1.03] transition disabled:opacity-50 shadow-[0_0_30px_rgba(212,175,55,0.35)]"
+          >
+            {loading
+              ? "Summoning their voices..."
+              : spoken
+              ? "Play again"
+              : "Hear what she has to say"}
+          </button>
+          <Link
+            href="/plan"
+            className="px-8 py-4 bg-white/10 border border-white/20 text-white rounded-full text-base font-medium hover:bg-white/20 transition"
+          >
+            See the plan →
+          </Link>
+        </div>
+      </div>
+    </main>
   );
 }
