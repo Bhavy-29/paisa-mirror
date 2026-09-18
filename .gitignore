@@ -1,8 +1,12 @@
+<<<<<<< HEAD
 node_modules/
 .env
 .env.*
 !.env.example
 .DS_Store# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
+=======
+# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
+>>>>>>> a732aea1dbc0af3ca50f54a170320f0ace046926
 
 # dependencies
 /node_modules
