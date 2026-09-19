@@ -25,7 +25,7 @@ export default function Questionnaire() {
   function back() {
     if (step > 0) setStep(step - 1);
   }
-  
+
   function finish() {
     if (typeof window !== "undefined") {
       localStorage.setItem(
