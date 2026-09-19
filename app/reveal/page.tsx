@@ -76,12 +76,17 @@ export default function Reveal() {
       stopSpeaking();
       speak(dep);
       setTimeout(() => speak(ind), 7000);
-    } catch (e) {
+        } catch (e) {
       console.error(e);
-      setDependentLine("(Voice unavailable — check API key)");
-      setIndependentLine("(Voice unavailable — check API key)");
+      const msg =
+        e instanceof Error && e.message.includes("GEMINI_API_KEY")
+          ? "(AI is not configured — please contact the team)"
+          : "(Could not reach the AI — check your internet and try again)";
+      setDependentLine(msg);
+      setIndependentLine(msg);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   }
 
   if (!profile) {
