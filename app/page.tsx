@@ -117,7 +117,6 @@ export default function Reveal() {
       </header>
 
       <div className="grid md:grid-cols-2 gap-0 md:gap-6 px-4 md:px-10 pb-32">
-        {/* LEFT — DEPENDENT */}
         <section className="relative rounded-3xl overflow-hidden bg-gradient-to-b from-neutral-950 to-black border border-red-900/30 p-8 flex flex-col items-center text-center min-h-[500px]">
           <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(220,38,38,0.08),_transparent_70%)] pointer-events-none" />
 
@@ -154,7 +153,6 @@ export default function Reveal() {
           </div>
         </section>
 
-        {/* RIGHT — INDEPENDENT */}
         <section className="relative rounded-3xl overflow-hidden bg-gradient-to-b from-amber-50 to-white border border-amber-200 p-8 flex flex-col items-center text-center min-h-[500px] text-black">
           <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(212,175,55,0.15),_transparent_70%)] pointer-events-none" />
 
