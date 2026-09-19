@@ -76,7 +76,7 @@ export default function Reveal() {
       stopSpeaking();
       speak(dep);
       setTimeout(() => speak(ind), 7000);
-        } catch (e) {
+    } catch (e) {
       console.error(e);
       const msg =
         e instanceof Error && e.message.includes("GEMINI_API_KEY")
@@ -125,7 +125,7 @@ export default function Reveal() {
               <img
                 src={profile.photoDataUrl}
                 alt="parent"
-                className="w-40 h-40 object-cover rounded-full border-2 border-red-900/40 grayscale-[40%] contrast-75"
+                className="w-40 h-40 object-cover rounded-full border-2 border-red-900/40 grayscale contrast-75 blur-[0.5px]"
               />
             </div>
           )}
@@ -161,7 +161,7 @@ export default function Reveal() {
               <img
                 src={profile.photoDataUrl}
                 alt="parent"
-                className="w-40 h-40 object-cover rounded-full border-2 border-amber-300"
+                className="w-40 h-40 object-cover rounded-full border-2 border-amber-300 saturate-125"
               />
             </div>
           )}
