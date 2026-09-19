@@ -1,105 +1,218 @@
+"use client";
+import { useEffect, useState } from "react";
 import Link from "next/link";
+import { calculateFutures, formatINR } from "@/lib/projection";
+import {
+  buildDependentPrompt,
+  buildIndependentPrompt,
+  PersonaProfile
+} from "@/lib/prompts";
+import { callGemini } from "@/lib/gemini";
+import { speak, stopSpeaking } from "@/lib/tts";
 
-function MirrorLogo() {
-  return (
-    <svg
-      viewBox="0 0 200 200"
-      className="w-40 h-40"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
-    >
-      <defs>
-        <linearGradient id="goldGrad" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0%" stopColor="#f5e6a8" />
-          <stop offset="50%" stopColor="#d4af37" />
-          <stop offset="100%" stopColor="#8b6914" />
-        </linearGradient>
-        <radialGradient id="glow" cx="0.5" cy="0.5" r="0.5">
-          <stop offset="0%" stopColor="#d4af37" stopOpacity="0.4" />
-          <stop offset="100%" stopColor="#d4af37" stopOpacity="0" />
-        </radialGradient>
-      </defs>
-
-      <circle cx="100" cy="100" r="90" fill="url(#glow)" />
-
-      <ellipse
-        cx="100"
-        cy="100"
-        rx="55"
-        ry="75"
-        stroke="url(#goldGrad)"
-        strokeWidth="2"
-      />
-      <line x1="100" y1="25" x2="100" y2="175" stroke="url(#goldGrad)" strokeWidth="1.5" />
-
-      <circle cx="70" cy="80" r="6" fill="url(#goldGrad)" />
-      <circle cx="130" cy="80" r="6" fill="url(#goldGrad)" />
-
-      <path
-        d="M60 130 Q100 145 140 130"
-        stroke="url(#goldGrad)"
-        strokeWidth="2"
-        strokeLinecap="round"
-        fill="none"
-      />
-    </svg>
-  );
+interface Profile {
+  photoDataUrl: string;
+  parentName: string;
+  parentAge: number;
+  monthlyIncome: number;
+  currentSavings: number;
+  hasPension: boolean;
+  habitsDetail: string;
 }
 
-export default function Home() {
-  return (
-    <main className="relative min-h-screen overflow-hidden bg-black text-white">
-      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_rgba(212,175,55,0.18),_transparent_60%)]" />
-      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_bottom_left,_rgba(255,255,255,0.05),_transparent_60%)]" />
+export default function Reveal() {
+  const [profile, setProfile] = useState<Profile | null>(null);
+  const [corpusA, setCorpusA] = useState(0);
+  const [corpusB, setCorpusB] = useState(0);
+  const [dependentLine, setDependentLine] = useState("");
+  const [independentLine, setIndependentLine] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [spoken, setSpoken] = useState(false);
 
-      <div className="relative z-10 grid md:grid-cols-2 min-h-screen">
-        <section className="flex flex-col justify-center px-8 md:px-20 py-16 animate-[fadeUp_1s_ease-out]">
-          <p className="text-xs tracking-[0.35em] text-amber-300/70 mb-6">
-            PAISA MIRROR
-          </p>
+  useEffect(() => {
+    const stored = localStorage.getItem("pm_profile");
+    if (!stored) return;
+    const p: Profile = JSON.parse(stored);
+    setProfile(p);
 
-          <h1 className="text-5xl md:text-7xl leading-[1.05] font-serif font-light">
-            Your parents
-            <br />
-            will turn{" "}
-            <span className="italic text-amber-200">70.</span>
-          </h1>
+    const result = calculateFutures({
+      parentCurrentAge: p.parentAge,
+      retirementAge: 70,
+      currentSavings: p.currentSavings,
+      monthlyAmountUserCanAdd: 9000,
+      annualReturnPercent: 12
+    });
+    setCorpusA(result.corpusA);
+    setCorpusB(result.corpusB);
+  }, []);
 
-          <p className="mt-8 text-lg md:text-xl text-neutral-400 max-w-md leading-relaxed">
-            Upload a photo. Meet the two versions of them that could exist —
-            one broke, one free. Both will speak to you.
-          </p>
+  async function hearHer() {
+    if (!profile) return;
+    setLoading(true);
 
+    const personaProfile: PersonaProfile = {
+      parentName: profile.parentName,
+      userName: "beta",
+      userAge: 25,
+      parentAge: profile.parentAge,
+      habitsDetail: profile.habitsDetail,
+      corpusA,
+      corpusB
+    };
+
+    try {
+      const depPrompt = buildDependentPrompt(personaProfile);
+      const indPrompt = buildIndependentPrompt(personaProfile);
+
+      const [dep, ind] = await Promise.all([
+        callGemini(depPrompt),
+        callGemini(indPrompt)
+      ]);
+
+      setDependentLine(dep);
+      setIndependentLine(ind);
+      setSpoken(true);
+
+      stopSpeaking();
+      speak(dep);
+      setTimeout(() => speak(ind), 7000);
+    } catch (e) {
+      console.error(e);
+      const msg =
+        e instanceof Error && e.message.includes("GEMINI_API_KEY")
+          ? "(AI is not configured — please contact the team)"
+          : "(Could not reach the AI — check your internet and try again)";
+      setDependentLine(msg);
+      setIndependentLine(msg);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  if (!profile) {
+    return (
+      <main className="min-h-screen flex items-center justify-center bg-black text-white">
+        <div className="text-center">
+          <p className="text-neutral-400 mb-6">No profile found.</p>
           <Link
             href="/questionnaire"
-            className="mt-12 inline-flex items-center gap-3 px-8 py-4 bg-white text-black rounded-full text-base font-medium w-fit transition-all hover:scale-[1.03] hover:shadow-[0_0_40px_rgba(255,255,255,0.3)]"
+            className="px-6 py-3 bg-white text-black rounded-full"
           >
-            Find out
-            <span className="text-lg">→</span>
+            Go back
           </Link>
+        </div>
+      </main>
+    );
+  }
 
-          <p className="mt-16 text-xs text-neutral-600">
-            Built at TechnoFora &apos;26 · FinTech Track
+  return (
+    <main className="min-h-screen bg-black text-white">
+      <header className="text-center pt-10 pb-4 px-6">
+        <p className="text-xs tracking-[0.35em] text-amber-300/60">
+          TWO FUTURES · ONE PARENT
+        </p>
+        <h1 className="mt-3 text-2xl md:text-3xl font-serif font-light">
+          Meet {profile.parentName}, age 70
+        </h1>
+      </header>
+
+      <div className="grid md:grid-cols-2 gap-0 md:gap-6 px-4 md:px-10 pb-32">
+        {/* LEFT — DEPENDENT */}
+        <section className="relative rounded-3xl overflow-hidden bg-gradient-to-b from-neutral-950 to-black border border-red-900/30 p-8 flex flex-col items-center text-center min-h-[500px]">
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(220,38,38,0.08),_transparent_70%)] pointer-events-none" />
+
+          {profile.photoDataUrl && (
+            <div className="relative">
+              <img
+                src={profile.photoDataUrl}
+                alt="parent"
+                className="w-40 h-40 object-cover rounded-full border-2 border-red-900/40 grayscale contrast-75 blur-[0.5px]"
+              />
+            </div>
+          )}
+
+          <p className="mt-8 text-xs tracking-[0.3em] text-red-400/70">
+            DEPENDENT FUTURE
           </p>
+
+          <p className="mt-4 text-5xl md:text-6xl font-serif font-light text-red-400">
+            {formatINR(corpusA)}
+          </p>
+
+          <p className="mt-3 text-neutral-500 text-sm">
+            living on your money
+          </p>
+
+          <div className="mt-8 pt-8 border-t border-neutral-800 w-full">
+            <p className="text-neutral-300 italic text-lg leading-relaxed min-h-[100px] flex items-center justify-center">
+              {dependentLine || (
+                <span className="text-neutral-600 not-italic text-sm">
+                  Press the button below to hear her voice
+                </span>
+              )}
+            </p>
+          </div>
         </section>
 
-        <section className="relative hidden md:flex items-center justify-center">
-          <div className="absolute inset-0 bg-gradient-to-l from-transparent to-black z-10" />
-          <div className="relative w-[80%] h-[80%] rounded-3xl bg-gradient-to-br from-amber-900/20 to-neutral-900 border border-amber-500/15 flex flex-col items-center justify-center shadow-[0_0_80px_rgba(212,175,55,0.1)]">
-            <MirrorLogo />
-            <p className="mt-6 text-xs tracking-[0.3em] text-amber-200/60">
-              TWO FUTURES · ONE CHOICE
+        {/* RIGHT — INDEPENDENT */}
+        <section className="relative rounded-3xl overflow-hidden bg-gradient-to-b from-amber-50 to-white border border-amber-200 p-8 flex flex-col items-center text-center min-h-[500px] text-black">
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(212,175,55,0.15),_transparent_70%)] pointer-events-none" />
+
+          {profile.photoDataUrl && (
+            <div className="relative">
+              <img
+                src={profile.photoDataUrl}
+                alt="parent"
+                className="w-40 h-40 object-cover rounded-full border-2 border-amber-300 saturate-125"
+              />
+            </div>
+          )}
+
+          <p className="mt-8 text-xs tracking-[0.3em] text-amber-700/80">
+            INDEPENDENT FUTURE
+          </p>
+
+          <p className="mt-4 text-5xl md:text-6xl font-serif font-light text-amber-700">
+            {formatINR(corpusB)}
+          </p>
+
+          <p className="mt-3 text-neutral-600 text-sm">
+            free and self-funded
+          </p>
+
+          <div className="mt-8 pt-8 border-t border-amber-200 w-full">
+            <p className="text-neutral-800 italic text-lg leading-relaxed min-h-[100px] flex items-center justify-center">
+              {independentLine || (
+                <span className="text-neutral-500 not-italic text-sm">
+                  Press the button below to hear her voice
+                </span>
+              )}
             </p>
           </div>
         </section>
       </div>
 
-      <style>{`
-        @keyframes fadeUp {
-          from { opacity: 0; transform: translateY(20px); }
-          to { opacity: 1; transform: translateY(0); }
-        }
-      `}</style>
+      <div className="fixed bottom-0 left-0 right-0 bg-gradient-to-t from-black via-black/95 to-transparent pt-8 pb-6 px-6">
+        <div className="flex justify-center gap-3">
+          <button
+            onClick={hearHer}
+            disabled={loading}
+            className="px-8 py-4 bg-amber-400 text-black rounded-full text-base font-medium hover:scale-[1.03] transition disabled:opacity-50 shadow-[0_0_30px_rgba(212,175,55,0.35)]"
+          >
+            {loading
+              ? "Summoning their voices..."
+              : spoken
+              ? "Play again"
+              : "Hear what she has to say"}
+          </button>
+          <Link
+            href="/plan"
+            className="px-8 py-4 bg-white/10 border border-white/20 text-white rounded-full text-base font-medium hover:bg-white/20 transition"
+          >
+            See the plan →
+          </Link>
+        </div>
+      </div>
     </main>
   );
 }
